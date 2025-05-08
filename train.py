@@ -112,80 +112,80 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
 
 
 if __name__ == '__main__':
-    seed_everything(42)
-    import argparse
+    seed_everything(42) # 设定随机种子
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--epoch', type=int, default=50, help='epoch number')  # 修改这里！！！
-    parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
-    parser.add_argument('--batchsize', type=int, default=8, help='training batch size')  # 修改这里！！！
-    parser.add_argument('--trainsize', type=int, default=256, help='training dataset size')
-    parser.add_argument('--clip', type=float, default=0.5, help='gradient clipping margin')
-    parser.add_argument('--decay_rate', type=float, default=0.1, help='decay rate of learning rate')
-    parser.add_argument('--decay_epoch', type=int, default=50, help='every n epochs decay learning rate')
-    parser.add_argument('--gpu_id', type=str, default='2', help='train use gpu')  # 修改这里！！！
-    parser.add_argument('--data_name', type=str, default='LEVIR',  # 修改这里！！！
-                        help='the test rgb images root')
-    parser.add_argument('--model_name', type=str, default='HSANet',
-                        help='the test rgb images root')
-    parser.add_argument('--save_path', type=str,
-                        default='./output/')
-    opt = parser.parse_args()
 
-    opt.save_path = opt.save_path + opt.data_name + '/' + opt.model_name
-    if opt.data_name == 'LEVIR':
-        opt.train_root = 'D:\\study\\datasets\\CD_datasets\\LEVIR\\train\\'
-        opt.val_root = 'D:\\study\\datasets\\CD_datasets\\LEVIR\\val\\'
-    elif opt.data_name == 'WHU':
-        opt.train_root = '/data/users/xuyichu/Code-RS/Data_HAN/WHU/train/'
-        opt.val_root = '/data/users/xuyichu/Code-RS/Data_HAN/WHU/val/'
-    elif opt.data_name == 'SYSU':
-        opt.train_root = '/data/users/xuyichu/Code-RS/Data_HAN/SYSU/train/'
-        opt.val_root = '/data/users/xuyichu/Code-RS/Data_HAN/SYSU/val/'
-    elif opt.data_name == 'S2Looking':
-        opt.train_root = '/data/users/xuyichu/Code-RS/Data_HAN/S2Looking/train/'
-        opt.val_root = '/data/users/xuyichu/Code-RS/Data_HAN/S2Looking/val/'
+    save_path = './output/'
+    data_name = 'LEVIR'
+    model_name = 'HSANet'
+    batchsize = 8
+    trainsize = 256
+    lr = 5e-4
+    epoch = 50
 
-    train_loader = data_loader.get_loader(opt.train_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=True,
+    save_path = save_path + data_name + '/' + model_name
+    if data_name == 'LEVIR':
+        train_root = 'D:\\study\\datasets\\CD_datasets\\LEVIR\\train\\'
+        val_root = 'D:\\study\\datasets\\CD_datasets\\LEVIR\\val\\'
+    elif data_name == 'WHU':
+        train_root = '/data/users/xuyichu/Code-RS/Data_HAN/WHU/train/'
+        val_root = '/data/users/xuyichu/Code-RS/Data_HAN/WHU/val/'
+    elif data_name == 'SYSU':
+        train_root = '/data/users/xuyichu/Code-RS/Data_HAN/SYSU/train/'
+        val_root = '/data/users/xuyichu/Code-RS/Data_HAN/SYSU/val/'
+    elif data_name == 'S2Looking':
+        train_root = '/data/users/xuyichu/Code-RS/Data_HAN/S2Looking/train/'
+        val_root = '/data/users/xuyichu/Code-RS/Data_HAN/S2Looking/val/'
+
+    # 使用自定义的 data_loader 模块加载训练/验证数据，返回 DataLoader 实例，供训练使用。
+    train_loader = data_loader.get_loader(train_root, batchsize, trainsize, num_workers=2, shuffle=True,
                                           pin_memory=True)
-    val_loader = data_loader.get_test_loader(opt.val_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=False,
+    val_loader = data_loader.get_test_loader(val_root, batchsize, trainsize, num_workers=2, shuffle=False,
                                              pin_memory=True)
+    # 初始化两个评估器，用于训练与验证阶段评估模型性能（比如 IoU、Precision、Recall 等）。
     Eva_train = Evaluator(num_class=2)
     Eva_val = Evaluator(num_class=2)
 
-
-    if opt.model_name == 'HSANet':
+    # 构建模型，创建 HSANet 模型并移动到 GPU 上。
+    if model_name == 'HSANet':
         model = HSANet().cuda()
 
-
+    # 使用 二分类的带 Logits 的交叉熵损失，适合输出未经过 Sigmoid 的二分类输出。
     criterion = nn.BCEWithLogitsLoss().cuda()
 
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     # base_optimizer = torch.optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0025)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0025)
+    # 加入了 weight decay 的 Adam 优化器。
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.0025)
+    # CosineAnnealingWarmRestarts: 余弦退火策略 + 周期性重启，有利于模型更好收敛。
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=15, T_mult=2)
 
-    save_path = opt.save_path
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    data_name = opt.data_name
+    data_name = data_name
     best_iou = 0.0
 
     print("Start train...")
     # args = parser.parse_args()
 
-    for epoch in range(1, opt.epoch):
+    for epoch in range(1, epoch):
         print(f"Epoch {epoch} started")  # 添加调试输出
         start_time = time.time()
+        # 打印当前学习率（因为学习率会变化）。
         for param_group in optimizer.param_groups:
-            print(param_group['lr'])
+            print(f"Epoch {epoch} learning rate : {param_group['lr']}")
         # cur_lr = adjust_lr(optimizer, opt.lr, epoch, opt.decay_rate, opt.decay_epoch)
+        # 每一轮训练前重置评估器状态。
         Eva_train.reset()
         Eva_val.reset()
+        # 调用训练函数 train(...) 执行一次完整的训练与验证过程（这个函数应在其他文件中定义）。
         train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, model, criterion, optimizer,
-              opt.epoch)
+              epoch)
+        # 更新学习率（执行调度器）
         lr_scheduler.step()
+
+        # 当前epoch执行所使用的时间
         epoch_time = time.time() - start_time
         print(f"Epoch {epoch} 耗时: {epoch_time:.2f}秒")
         # print('现在的数据是：', args.data_name)
