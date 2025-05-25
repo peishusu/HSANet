@@ -200,48 +200,51 @@ class HSANet(nn.Module):
         self.decoder_module2 = BasicConv2d(384,128,3,1,1)
 
     def forward(self,A,B):
+        '''
+            我需要知道每层的输入而后输出合适
+            输入的A(B,3,H,W) B(B,3,H,W)
+        '''
+        size = A.size()[2:]  # (H,W)
+        layer1_pre = self.inc(A) # B,64,H,W
+        layer1_A = self.down1(layer1_pre) # B,128,H/2,W/2
+        layer2_A = self.down2(layer1_A) # B,256,H/4,W/4
+        layer3_A = self.down3(layer2_A) # B,512,H/8,W/8
+        layer4_A = self.down4(layer3_A) # B,512,H/16,W/16
 
-        size = A.size()[2:]
-        layer1_pre = self.inc(A) # 2,64,256,256
-        layer1_A = self.down1(layer1_pre) # 2,128,128,128
-        layer2_A = self.down2(layer1_A) # 2,256,64,64
-        layer3_A = self.down3(layer2_A) # 2,512,32,32
-        layer4_A = self.down4(layer3_A) # 2,512,16,16
-
-        layer1_pre = self.inc(B)
-        layer1_B = self.down1(layer1_pre)
-        layer2_B = self.down2(layer1_B)
-        layer3_B = self.down3(layer2_B)
-        layer4_B = self.down4(layer3_B)
+        layer1_pre = self.inc(B) # B,64,H,W
+        layer1_B = self.down1(layer1_pre)  #B,128,H/2,W/2
+        layer2_B = self.down2(layer1_B) # B,256,H/4,W/4
+        layer3_B = self.down3(layer2_B) # B,512,H/8,W/8
+        layer4_B = self.down4(layer3_B) # B,512,H/16,W/16
 
         # Concatenate features from A and B
-        layer1 = self.conv_reduce_1(torch.cat((layer1_B, layer1_A), dim=1)) # 2,128,128,128
-        layer2 = self.conv_reduce_2(torch.cat((layer2_B, layer2_A), dim=1)) # 2,256,64,64
-        layer3 = self.conv_reduce_3(torch.cat((layer3_B, layer3_A), dim=1)) # 2,512,32,32
-        layer4 = self.conv_reduce_4(torch.cat((layer4_B, layer4_A), dim=1)) # 2,512,16,16
+        layer1 = self.conv_reduce_1(torch.cat((layer1_B, layer1_A), dim=1)) # B,128,H/2,W/2
+        layer2 = self.conv_reduce_2(torch.cat((layer2_B, layer2_A), dim=1)) # B,256,H/4,W/4
+        layer3 = self.conv_reduce_3(torch.cat((layer3_B, layer3_A), dim=1)) # B,512,H/8,W/8
+        layer4 = self.conv_reduce_4(torch.cat((layer4_B, layer4_A), dim=1)) # B,512,H/16,W/16
 
         # change semantic guiding map 这部分没用到
-        layer4_1 = F.interpolate(layer4, layer1.size()[2:], mode='bilinear', align_corners=True) # 2,512,128,128
+        layer4_1 = F.interpolate(layer4, layer1.size()[2:], mode='bilinear', align_corners=True) # B,512,H/2,W/2
         feature_fuse=layer4_1 #需要注释！
-        change_map = self.decoder(feature_fuse)  #2,1,128,128
+        change_map = self.decoder(feature_fuse)  #B,1,H/2,W/2
 
         # self attention
-        layer4_4 = self.sa_4(layer4)
-        layer4_5 = self.cgm_4(layer4_4,layer4)
-        feature4 = self.decoder_module4(torch.cat([self.upsample2x(layer4_5), layer3], 1))
+        layer4_4 = self.sa_4(layer4) # Self_Attention模块 B,512,h/16,W/16
+        layer4_5 = self.cgm_4(layer4_4,layer4) # Cross_Attention模块 # B,512,h/16,W/16
+        feature4 = self.decoder_module4(torch.cat([self.upsample2x(layer4_5), layer3], 1)) # fushion module模块 b,512,H/8,W/8
 
-        layer3_3 = self.sa_3(feature4)
-        layer3_4 = self.cgm_3(layer3_3,layer3)
-        feature3 = self.decoder_module3(torch.cat([self.upsample2x(layer3_4),layer2],1))
+        layer3_3 = self.sa_3(feature4) # b,512,H/8,W/8
+        layer3_4 = self.cgm_3(layer3_3,layer3) # b,512,H/8,W/8
+        feature3 = self.decoder_module3(torch.cat([self.upsample2x(layer3_4),layer2],1)) # b,256,h/4,w/4
 
-        layer2_3 = self.sa_2(feature3)
-        layer2_4 = self.cgm_2(layer2_3,layer2)
-        feature2 = self.decoder_module2(torch.cat([self.upsample2x(layer2_4), layer1], 1))
+        layer2_3 = self.sa_2(feature3) #B,256,H/4,W/4
+        layer2_4 = self.cgm_2(layer2_3,layer2) # B,256,H/4,W/4
+        feature2 = self.decoder_module2(torch.cat([self.upsample2x(layer2_4), layer1], 1)) # B,128,H/2,W/2
 
-        change_map = F.interpolate(change_map, size, mode='bilinear', align_corners=True)
-        final_map = self.decoder_final(feature2)
+        change_map = F.interpolate(change_map, size, mode='bilinear', align_corners=True) #b,1,H,W
+        final_map = self.decoder_final(feature2) #B,1,H/2,W/2
 
-        final_map = F.interpolate(final_map, size, mode='bilinear', align_corners=True)
+        final_map = F.interpolate(final_map, size, mode='bilinear', align_corners=True) # B,1,H,W
 
         return change_map, final_map
 

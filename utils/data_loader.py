@@ -101,8 +101,8 @@ class ChangeDataset(data.Dataset):
     def __init__(self, root, trainsize, mosaic_ratio=0.75):
         self.trainsize = trainsize
         # get filenames
-        self.image_root_A =  root + 'A/'
-        self.image_root_B =  root + 'B/'
+        self.image_root_A =  root + 't1/'
+        self.image_root_B =  root + 't2/'
         self.gt_root = root + 'label/'
         self.mosaic_ratio = mosaic_ratio
         self.images_A = [self.image_root_A + f for f in os.listdir(self.image_root_A) if f.endswith('.jpg') or f.endswith('.png')]
@@ -127,7 +127,7 @@ class ChangeDataset(data.Dataset):
     def __getitem__(self, index):
         # read imgs/gts/grads/depths
         p_ratio = random.random()
-        if p_ratio > self.mosaic_ratio:
+        if p_ratio > self.mosaic_ratio: #前面这一坨可以理解为仅仅是针对这个图像进行一些预处理或者说增强操作
             image_A, image_B, gt = self.load_img_and_mask(index)
             image_A, image_B, gt = cv_random_flip(image_A, image_B, gt)
             image_A, image_B, gt = randomCrop(image_A, image_B, gt)
@@ -142,8 +142,8 @@ class ChangeDataset(data.Dataset):
             gt = randomPeper(gt)
 
         image_A = self.img_transform(image_A)
-        image_B = self.img_transform(image_B)
-        gt = self.gt_transform(gt)
+        image_B = self.img_transform(image_B)# (3,h,w)
+        gt = self.gt_transform(gt) #(1,h,w)
 
         return image_A, image_B, gt
 
@@ -249,8 +249,8 @@ class Test_ChangeDataset(data.Dataset):
     def __init__(self, root, trainsize):
         self.trainsize = trainsize
         # get filenames
-        image_root_A =  root + 'A/'
-        image_root_B =  root + 'B/'
+        image_root_A =  root + 't1/'
+        image_root_B =  root + 't2/'
         gt_root = root + 'label/'
         self.images_A = [image_root_A + f for f in os.listdir(image_root_A) if f.endswith('.jpg') or f.endswith('.png')]
         self.images_B = [image_root_B + f for f in os.listdir(image_root_B) if f.endswith('.jpg') or f.endswith('.png')]

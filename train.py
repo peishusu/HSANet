@@ -39,12 +39,13 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
 
     length = 0
     st = time.time()
+    # 进入 train流程，
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
-        A = A.cuda()
-        B = B.cuda()
-        Y = mask.cuda()
+        A = A.cuda()  # (B,3,H,W)
+        B = B.cuda() #(B,3,H,W)
+        Y = mask.cuda()   #(B,1,H,W)
         optimizer.zero_grad()
-        preds = net(A, B)
+        preds = net(A, B) # preds是一个元组，输出的格式为 (b,1,h,w)
         loss = criterion(preds[0], Y) + criterion(preds[1], Y)
         # ---- loss function ----
         loss.backward()
@@ -77,6 +78,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         'Epoch [%d/%d], Loss: %.4f,\n[Training]IoU: %.4f, Precision:%.4f, Recall: %.4f, F1: %.4f' % (epoch, num_epoches, train_loss, IoU, Pre, Recall, F1))
     print("Strat validing!")
 
+
+    # 进入val流程
     net.train(False)
     net.eval()
     for i, (A, B, mask, filename) in enumerate(tqdm(val_loader)):
@@ -118,7 +121,7 @@ if __name__ == '__main__':
     save_path = './output/'
     data_name = 'LEVIR'
     model_name = 'HSANet'
-    batchsize = 8
+    batchsize = 1
     trainsize = 256
     lr = 5e-4
     epoch = 50
